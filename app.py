@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
+from openpyxl import load_workbook
 import tempfile
+import os
 
 st.set_page_config(page_title="Отчет по ресурсам", layout="centered")
 st.title("📊 Формирование отчета по ресурсам")
@@ -49,7 +51,6 @@ if generate:
     st.subheader("Выберите колонки дат")
 
     cols = data.columns.tolist()
-
     col_start = st.selectbox("Колонка НАЧАЛА", cols)
     col_end   = st.selectbox("Колонка ОКОНЧАНИЯ", cols)
 
@@ -65,11 +66,24 @@ if generate:
 
     st.success(f"Найдено строк: {len(filtered)}")
 
-    # ---------- СОХРАНЕНИЕ ----------
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    # ---------- ЗАПИСЬ В ШАБЛОН ----------
+    if not os.path.exists("template.xlsx"):
+        st.error("Файл template.xlsx не найден рядом с app.py")
+        st.stop()
 
-    with pd.ExcelWriter(tmp.name, engine="xlsxwriter") as writer:
-        filtered.to_excel(writer, index=False, sheet_name="Data")
+    wb = load_workbook("template.xlsx")
+    ws = wb["Data"]   # ВАЖНО: имя листа в шаблоне
+
+    # очистка старых данных
+    if ws.max_row > 1:
+        ws.delete_rows(2, ws.max_row)
+
+    # запись
+    for _, row in filtered.iterrows():
+        ws.append(list(row))
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    wb.save(tmp.name)
 
     with open(tmp.name, "rb") as f:
         st.download_button(
