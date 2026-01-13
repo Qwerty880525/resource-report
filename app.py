@@ -4,16 +4,19 @@ from datetime import datetime
 from openpyxl import load_workbook
 import tempfile
 
+# Настройки страницы
 st.set_page_config(page_title="Отчет по ресурсам", layout="centered")
 
 st.title("📊 Формирование отчета по ресурсам")
 
+# Загрузка файлов
 uploaded_files = st.file_uploader(
     "Загрузите файлы проектов (Excel)",
     type=["xlsx"],
     accept_multiple_files=True
 )
 
+# Выбор периода
 col1, col2 = st.columns(2)
 with col1:
     date_from = st.date_input("Начало")
@@ -22,12 +25,15 @@ with col2:
 
 generate = st.button("🚀 Сформировать отчет")
 
+# Функция чтения
 def read_data(file):
     df = pd.read_excel(file, sheet_name="Data")
     return df
 
+
 if generate:
 
+    # Проверки
     if not uploaded_files:
         st.error("Загрузите хотя бы один файл")
         st.stop()
@@ -36,53 +42,61 @@ if generate:
         st.error("Неверный период")
         st.stop()
 
+    # Читаем все файлы
     dfs = []
     for file in uploaded_files:
         try:
             df = read_data(file)
             dfs.append(df)
-        except:
+        except Exception as e:
             st.error(f"Ошибка чтения файла: {file.name}")
             st.stop()
 
+    # Объединяем
     data = pd.concat(dfs, ignore_index=True)
 
-    # Преобразуем дату
- st.subheader("Выберите колонку с датой")
+    st.subheader("Выберите колонку с датой")
 
-columns = df.columns.tolist()
+    columns = data.columns.tolist()
 
-date_col = st.selectbox(
-    "Колонка с датой:",
-    columns
-)
+    date_col = st.selectbox(
+        "Колонка с датой:",
+        columns
+    )
 
-df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+    # Приводим к дате
+    data[date_col] = pd.to_datetime(data[date_col], errors="coerce")
 
-    # Фильтр по периоду
-    main_date_col = date_columns[0]
-   mask = (df[date_col] >= start_date) & (df[date_col] <= end_date)
-filtered_df = df[mask]
+    # Фильтрация
+    mask = (
+        (data[date_col] >= pd.to_datetime(date_from)) &
+        (data[date_col] <= pd.to_datetime(date_to))
+    )
 
-    # Работаем с шаблоном
+    filtered_df = data[mask]
+
+    st.success(f"Найдено строк: {len(filtered_df)}")
+
+    # Работа с шаблоном
     wb = load_workbook("template.xlsx")
     ws = wb["Data"]
 
-    ws.delete_rows(2, ws.max_row)
+    # Очищаем старые строки
+    if ws.max_row > 1:
+        ws.delete_rows(2, ws.max_row)
 
-    for i, row in filtered.iterrows():
+    # Записываем новые данные
+    for _, row in filtered_df.iterrows():
         ws.append(list(row))
 
+    # Сохраняем временный файл
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
     wb.save(tmp.name)
 
     with open(tmp.name, "rb") as f:
-        st.success("Отчет готов!")
+        st.success("✅ Отчет готов!")
         st.download_button(
             "⬇ Скачать отчет",
             f,
             file_name="Отчет_по_ресурсам.xlsx"
         )
-
-
-
