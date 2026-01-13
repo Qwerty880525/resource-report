@@ -4,14 +4,13 @@ from openpyxl import load_workbook
 import tempfile
 
 st.set_page_config(page_title="Отчет по ресурсам", layout="centered")
-
 st.title("📊 Формирование отчета по ресурсам")
 
-# --- SESSION ---
+# ---------- SESSION ----------
 if "files" not in st.session_state:
     st.session_state.files = None
 
-# --- Upload ---
+# ---------- ЗАГРУЗКА ----------
 uploaded_files = st.file_uploader(
     "Загрузите файлы проектов (Excel)",
     type=["xlsx"],
@@ -21,69 +20,67 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
     st.session_state.files = uploaded_files
 
-# --- Dates ---
+# ---------- ПЕРИОД ----------
 col1, col2 = st.columns(2)
 with col1:
-    date_from = st.date_input("Начало")
+    date_from = st.date_input("Начало периода")
 with col2:
-    date_to = st.date_input("Окончание")
+    date_to = st.date_input("Окончание периода")
 
-# --- Button ---
 generate = st.button("🚀 Сформировать отчет")
 
-# --- Read ---
+# ---------- ЧТЕНИЕ ----------
 def read_data(file):
     return pd.read_excel(file, sheet_name="Data")
 
-
+# ---------- ОСНОВНАЯ ЛОГИКА ----------
 if generate:
 
-    files = st.session_state.files
-
-    if not files:
-        st.error("Загрузите файл")
-        st.stop()
-
-    if date_from > date_to:
-        st.error("Неверный период")
+    if not st.session_state.files:
+        st.error("Загрузите файлы")
         st.stop()
 
     dfs = []
-    for f in files:
-        dfs.append(read_data(f))
+    for f in st.session_state.files:
+        df = read_data(f)
+        dfs.append(df)
 
     data = pd.concat(dfs, ignore_index=True)
 
-    st.subheader("Выберите колонки с датами")
+    st.subheader("Выберите колонки дат")
 
     cols = data.columns.tolist()
 
-    start_col = st.selectbox("Колонка НАЧАЛА:", cols)
-    end_col = st.selectbox("Колонка ОКОНЧАНИЯ:", cols)
+    col_start = st.selectbox("Колонка НАЧАЛА", cols)
+    col_end   = st.selectbox("Колонка ОКОНЧАНИЯ", cols)
 
-    # convert
-    data[start_col] = pd.to_datetime(data[start_col], errors="coerce")
-    data[end_col] = pd.to_datetime(data[end_col], errors="coerce")
+    # приводим к датам
+    data[col_start] = pd.to_datetime(data[col_start], errors="coerce")
+    data[col_end]   = pd.to_datetime(data[col_end], errors="coerce")
 
-    # logic: пересечение периодов
+    # логика пересечения периодов
     mask = (
-        (data[start_col] <= pd.to_datetime(date_to)) &
-        (data[end_col] >= pd.to_datetime(date_from))
+        (data[col_start] <= pd.to_datetime(date_to)) &
+        (data[col_end]   >= pd.to_datetime(date_from))
     )
 
     filtered = data[mask]
 
     st.success(f"Найдено строк: {len(filtered)}")
 
-    # ---- Save to template ----
+    # ---------- EXCEL ----------
     wb = load_workbook("template.xlsx")
     ws = wb["Data"]
 
-    ws.delete_rows(2, ws.max_row)
+    # очистка
+    if ws.max_row > 1:
+        ws.delete_rows(2, ws.max_row)
 
-    for _, r in filtered.iterrows():
-        ws.append(list(r))
+    # запись
+    for _, row in filtered.iterrows():
+        ws.append(list(row))
 
+    # сохранение
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
     wb.save(tmp.name)
 
