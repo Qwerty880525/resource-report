@@ -2,26 +2,25 @@ import streamlit as st
 import pandas as pd
 from openpyxl import load_workbook
 import tempfile
-import os
 
 st.set_page_config(page_title="Отчет по ресурсам", layout="centered")
 st.title("📊 Формирование отчета по ресурсам")
 
-# ---------- SESSION ----------
-if "files" not in st.session_state:
-    st.session_state.files = None
+# ---------------- ЗАГРУЗКА ФАЙЛОВ ----------------
 
-# ---------- ЗАГРУЗКА ----------
-uploaded_files = st.file_uploader(
-    "Загрузите файлы проектов (Excel)",
+project_files = st.file_uploader(
+    "1) Загрузите файлы проектов (Excel)",
     type=["xlsx"],
     accept_multiple_files=True
 )
 
-if uploaded_files:
-    st.session_state.files = uploaded_files
+template_file = st.file_uploader(
+    "2) Загрузите ШАБЛОН отчета (template.xlsx)",
+    type=["xlsx"]
+)
 
-# ---------- ПЕРИОД ----------
+# ---------------- ПЕРИОД ----------------
+
 col1, col2 = st.columns(2)
 with col1:
     date_from = st.date_input("Начало периода")
@@ -30,19 +29,26 @@ with col2:
 
 generate = st.button("🚀 Сформировать отчет")
 
-# ---------- ЧТЕНИЕ ----------
+# ---------------- ФУНКЦИЯ ЧТЕНИЯ ----------------
+
 def read_data(file):
     return pd.read_excel(file, sheet_name="Data")
 
-# ---------- ОСНОВНАЯ ЛОГИКА ----------
+# ---------------- ОСНОВНАЯ ЛОГИКА ----------------
+
 if generate:
 
-    if not st.session_state.files:
-        st.error("Загрузите файлы")
+    if not project_files:
+        st.error("Загрузите файлы проектов")
         st.stop()
 
+    if not template_file:
+        st.error("Загрузите шаблон отчета")
+        st.stop()
+
+    # 1. объединяем данные
     dfs = []
-    for f in st.session_state.files:
+    for f in project_files:
         df = read_data(f)
         dfs.append(df)
 
@@ -57,6 +63,7 @@ if generate:
     data[col_start] = pd.to_datetime(data[col_start], errors="coerce")
     data[col_end]   = pd.to_datetime(data[col_end], errors="coerce")
 
+    # 2. фильтр по пересечению периодов
     mask = (
         (data[col_start] <= pd.to_datetime(date_to)) &
         (data[col_end]   >= pd.to_datetime(date_from))
@@ -66,26 +73,28 @@ if generate:
 
     st.success(f"Найдено строк: {len(filtered)}")
 
-    # ---------- ЗАПИСЬ В ШАБЛОН ----------
-    if not os.path.exists("template.xlsx"):
-        st.error("Файл template.xlsx не найден рядом с app.py")
-        st.stop()
+    # 3. сохраняем шаблон во временный файл
+    tmp_template = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    tmp_template.write(template_file.read())
+    tmp_template.close()
 
-    wb = load_workbook("template.xlsx")
-    ws = wb["Data"]   # ВАЖНО: имя листа в шаблоне
+    # 4. открываем шаблон
+    wb = load_workbook(tmp_template.name)
+    ws = wb["Data"]   # ЛИСТ В ШАБЛОНЕ
 
-    # очистка старых данных
+    # 5. чистим старые строки
     if ws.max_row > 1:
         ws.delete_rows(2, ws.max_row)
 
-    # запись
+    # 6. записываем новые данные
     for _, row in filtered.iterrows():
         ws.append(list(row))
 
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
-    wb.save(tmp.name)
+    # 7. сохраняем готовый файл
+    tmp_out = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    wb.save(tmp_out.name)
 
-    with open(tmp.name, "rb") as f:
+    with open(tmp_out.name, "rb") as f:
         st.download_button(
             "⬇ Скачать отчет",
             f,
