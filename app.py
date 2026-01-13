@@ -48,9 +48,10 @@ if generate:
     data = pd.concat(dfs, ignore_index=True)
 
     # Преобразуем дату
-   st.subheader("Выберите колонку с датой")
+ st.subheader("Выберите колонку с датой")
 
 columns = df.columns.tolist()
+
 date_col = st.selectbox(
     "Колонка с датой:",
     columns
@@ -82,5 +83,6 @@ filtered_df = df[mask]
             f,
             file_name="Отчет_по_ресурсам.xlsx"
         )
+
 
 
