@@ -16,9 +16,9 @@ uploaded_files = st.file_uploader(
 
 col1, col2 = st.columns(2)
 with col1:
-    date_from = st.date_input("Дата С")
+    date_from = st.date_input("Начало")
 with col2:
-    date_to = st.date_input("Дата ПО")
+    date_to = st.date_input("Окончание")
 
 generate = st.button("🚀 Сформировать отчет")
 
@@ -77,3 +77,4 @@ if generate:
             f,
             file_name="Отчет_по_ресурсам.xlsx"
         )
+
