@@ -1,100 +1,93 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 from openpyxl import load_workbook
 import tempfile
 
-# Настройки страницы
 st.set_page_config(page_title="Отчет по ресурсам", layout="centered")
 
 st.title("📊 Формирование отчета по ресурсам")
 
-# Загрузка файлов
+# --- SESSION ---
+if "files" not in st.session_state:
+    st.session_state.files = None
+
+# --- Upload ---
 uploaded_files = st.file_uploader(
     "Загрузите файлы проектов (Excel)",
     type=["xlsx"],
     accept_multiple_files=True
 )
 
-# Выбор периода
+if uploaded_files:
+    st.session_state.files = uploaded_files
+
+# --- Dates ---
 col1, col2 = st.columns(2)
 with col1:
     date_from = st.date_input("Начало")
 with col2:
     date_to = st.date_input("Окончание")
 
+# --- Button ---
 generate = st.button("🚀 Сформировать отчет")
 
-# Функция чтения
+# --- Read ---
 def read_data(file):
-    df = pd.read_excel(file, sheet_name="Data")
-    return df
+    return pd.read_excel(file, sheet_name="Data")
 
 
 if generate:
 
-    # Проверки
-    if not uploaded_files:
-        st.error("Загрузите хотя бы один файл")
+    files = st.session_state.files
+
+    if not files:
+        st.error("Загрузите файл")
         st.stop()
 
     if date_from > date_to:
         st.error("Неверный период")
         st.stop()
 
-    # Читаем все файлы
     dfs = []
-    for file in uploaded_files:
-        try:
-            df = read_data(file)
-            dfs.append(df)
-        except Exception as e:
-            st.error(f"Ошибка чтения файла: {file.name}")
-            st.stop()
+    for f in files:
+        dfs.append(read_data(f))
 
-    # Объединяем
     data = pd.concat(dfs, ignore_index=True)
 
-    st.subheader("Выберите колонку с датой")
+    st.subheader("Выберите колонки с датами")
 
-    columns = data.columns.tolist()
+    cols = data.columns.tolist()
 
-    date_col = st.selectbox(
-        "Колонка с датой:",
-        columns
-    )
+    start_col = st.selectbox("Колонка НАЧАЛА:", cols)
+    end_col = st.selectbox("Колонка ОКОНЧАНИЯ:", cols)
 
-    # Приводим к дате
-    data[date_col] = pd.to_datetime(data[date_col], errors="coerce")
+    # convert
+    data[start_col] = pd.to_datetime(data[start_col], errors="coerce")
+    data[end_col] = pd.to_datetime(data[end_col], errors="coerce")
 
-    # Фильтрация
+    # logic: пересечение периодов
     mask = (
-        (data[date_col] >= pd.to_datetime(date_from)) &
-        (data[date_col] <= pd.to_datetime(date_to))
+        (data[start_col] <= pd.to_datetime(date_to)) &
+        (data[end_col] >= pd.to_datetime(date_from))
     )
 
-    filtered_df = data[mask]
+    filtered = data[mask]
 
-    st.success(f"Найдено строк: {len(filtered_df)}")
+    st.success(f"Найдено строк: {len(filtered)}")
 
-    # Работа с шаблоном
+    # ---- Save to template ----
     wb = load_workbook("template.xlsx")
     ws = wb["Data"]
 
-    # Очищаем старые строки
-    if ws.max_row > 1:
-        ws.delete_rows(2, ws.max_row)
+    ws.delete_rows(2, ws.max_row)
 
-    # Записываем новые данные
-    for _, row in filtered_df.iterrows():
-        ws.append(list(row))
+    for _, r in filtered.iterrows():
+        ws.append(list(r))
 
-    # Сохраняем временный файл
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
     wb.save(tmp.name)
 
     with open(tmp.name, "rb") as f:
-        st.success("✅ Отчет готов!")
         st.download_button(
             "⬇ Скачать отчет",
             f,
