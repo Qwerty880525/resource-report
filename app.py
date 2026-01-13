@@ -48,15 +48,20 @@ if generate:
     data = pd.concat(dfs, ignore_index=True)
 
     # Преобразуем дату
-    date_columns = [c for c in data.columns if "дата" in c.lower()]
-    for col in date_columns:
-        data[col] = pd.to_datetime(data[col], errors="coerce")
+   st.subheader("Выберите колонку с датой")
+
+columns = df.columns.tolist()
+date_col = st.selectbox(
+    "Колонка с датой:",
+    columns
+)
+
+df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
 
     # Фильтр по периоду
     main_date_col = date_columns[0]
-    mask = (data[main_date_col] >= pd.to_datetime(date_from)) & \
-           (data[main_date_col] <= pd.to_datetime(date_to))
-    filtered = data[mask]
+   mask = (df[date_col] >= start_date) & (df[date_col] <= end_date)
+filtered_df = df[mask]
 
     # Работаем с шаблоном
     wb = load_workbook("template.xlsx")
@@ -77,4 +82,5 @@ if generate:
             f,
             file_name="Отчет_по_ресурсам.xlsx"
         )
+
 
