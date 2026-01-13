@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from openpyxl import load_workbook
 import tempfile
 
 st.set_page_config(page_title="Отчет по ресурсам", layout="centered")
@@ -54,11 +53,9 @@ if generate:
     col_start = st.selectbox("Колонка НАЧАЛА", cols)
     col_end   = st.selectbox("Колонка ОКОНЧАНИЯ", cols)
 
-    # приводим к датам
     data[col_start] = pd.to_datetime(data[col_start], errors="coerce")
     data[col_end]   = pd.to_datetime(data[col_end], errors="coerce")
 
-    # логика пересечения периодов
     mask = (
         (data[col_start] <= pd.to_datetime(date_to)) &
         (data[col_end]   >= pd.to_datetime(date_from))
@@ -68,21 +65,11 @@ if generate:
 
     st.success(f"Найдено строк: {len(filtered)}")
 
-    # ---------- EXCEL ----------
-    wb = load_workbook("template.xlsx")
-    ws = wb["Data"]
-
-    # очистка
-    if ws.max_row > 1:
-        ws.delete_rows(2, ws.max_row)
-
-    # запись
-    for _, row in filtered.iterrows():
-        ws.append(list(row))
-
-    # сохранение
+    # ---------- СОХРАНЕНИЕ ----------
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
-    wb.save(tmp.name)
+
+    with pd.ExcelWriter(tmp.name, engine="xlsxwriter") as writer:
+        filtered.to_excel(writer, index=False, sheet_name="Data")
 
     with open(tmp.name, "rb") as f:
         st.download_button(
